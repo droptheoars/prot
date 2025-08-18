@@ -47,9 +47,13 @@ class WebflowClient {
 
       const config = {
         method,
-        url,
-        data
+        url
       };
+
+      // Only add data for POST/PUT requests
+      if (data && (method.toLowerCase() === 'post' || method.toLowerCase() === 'put')) {
+        config.data = data;
+      }
 
       console.log(`Making ${method.toUpperCase()} request to: ${url}`);
       const response = await this.client(config);
