@@ -59,12 +59,7 @@ Copy `.env.example` to `.env` and fill in your credentials:
 cp .env.example .env
 ```
 
-Required environment variables:
-- `WEBFLOW_API_TOKEN`: Your Webflow API token
-- `WEBFLOW_SITE_ID`: 684aad18638c640e1a5e814d
-- `WEBFLOW_COLLECTION_ID`: 684aad18638c640e1a5e821f
-- `AWS_ACCESS_KEY_ID`: Your AWS access key
-- `AWS_SECRET_ACCESS_KEY`: Your AWS secret key
+
 
 ### 3. Local Testing
 
