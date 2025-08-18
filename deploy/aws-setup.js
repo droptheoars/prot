@@ -12,6 +12,7 @@ const lambda = new AWS.Lambda();
 const dynamodb = new AWS.DynamoDB();
 const events = new AWS.EventBridge();
 const iam = new AWS.IAM();
+const sts = new AWS.STS();
 const fs = require('fs');
 const path = require('path');
 
@@ -211,7 +212,7 @@ class AWSInfrastructureSetup {
         FunctionName: this.functionName,
         Runtime: 'nodejs18.x',
         Role: roleArn,
-        Handler: 'src/lambda-handler.handler',
+        Handler: 'src/simple-lambda.handler',
         Code: {
           ZipFile: zipBuffer
         },
@@ -334,6 +335,10 @@ class AWSInfrastructureSetup {
 
       await events.putTargets(targetParams).promise();
 
+      // Get AWS account ID
+      const identity = await sts.getCallerIdentity().promise();
+      const accountId = identity.Account;
+
       // Add permission for EventBridge to invoke Lambda
       try {
         await lambda.addPermission({
@@ -341,7 +346,7 @@ class AWSInfrastructureSetup {
           StatementId: 'allow-eventbridge',
           Action: 'lambda:InvokeFunction',
           Principal: 'events.amazonaws.com',
-          SourceArn: `arn:aws:events:${this.region}:*:rule/${this.ruleName}`
+          SourceArn: `arn:aws:events:${this.region}:${accountId}:rule/${this.ruleName}`
         }).promise();
       } catch (error) {
         if (error.code !== 'ResourceConflictException') {

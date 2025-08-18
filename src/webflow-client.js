@@ -22,7 +22,6 @@ class WebflowClient {
       baseURL: this.baseUrl,
       headers: {
         'Authorization': `Bearer ${this.apiToken}`,
-        'Accept-Version': '1.0.0',
         'Content-Type': 'application/json'
       }
     });
@@ -80,7 +79,7 @@ class WebflowClient {
   async getCollectionItems() {
     try {
       console.log('Fetching existing collection items...');
-      const url = `/collections/${this.collectionId}/items`;
+      const url = `/v2/sites/${this.siteId}/collections/${this.collectionId}/items`;
       const response = await this.makeRequest('GET', url);
       
       console.log(`Found ${response.items?.length || 0} existing items`);
@@ -95,16 +94,16 @@ class WebflowClient {
     try {
       const existingItems = await this.getCollectionItems();
       
-      // Check for duplicates based on title and date
+      // Check for duplicates based on title and date (v2 API format)
       const duplicate = existingItems.find(item => {
-        const titleMatch = item.name === pressRelease.title;
-        const dateMatch = item.date && new Date(item.date).toDateString() === pressRelease.date.toDateString();
+        const titleMatch = item.fieldData?.name === pressRelease.title;
+        const dateMatch = item.fieldData?.['date-2'] && new Date(item.fieldData['date-2']).toDateString() === pressRelease.date.toDateString();
         return titleMatch && dateMatch;
       });
 
       if (duplicate) {
         console.log(`Duplicate found for: ${pressRelease.title}`);
-        return duplicate._id;
+        return duplicate.id;
       }
 
       return null;
@@ -140,29 +139,29 @@ class WebflowClient {
       // Create read more link
       const readMoreLink = pressRelease.link || '';
 
-      // Based on the Webflow collection fields shown in the screenshot:
-      // - Name (required)
-      // - Slug (required) 
-      // - Date (Date/Time)
-      // - content (Rich text)
-      // - Read more link (Link)
+      // Based on the actual Webflow collection fields from API:
+      // - name (required)
+      // - slug (required) 
+      // - date-2 (Date/Time)
+      // - pm-body-html (Rich text)
+      // - read-more-link (Link)
       
       const webflowItem = {
-        fields: {
+        isArchived: false,
+        isDraft: true, // Create as draft initially for safety
+        fieldData: {
           name: pressRelease.title,
           slug: slug,
-          date: formattedDate,
-          content: content,
-          'read-more-link': readMoreLink,
-          _archived: false,
-          _draft: true // Create as draft initially for safety
+          'date-2': formattedDate,
+          'pm-body-html': content,
+          'read-more-link': readMoreLink
         }
       };
 
       console.log('Formatted item for Webflow:', {
-        name: webflowItem.fields.name,
-        slug: webflowItem.fields.slug,
-        date: webflowItem.fields.date,
+        name: webflowItem.fieldData.name,
+        slug: webflowItem.fieldData.slug,
+        date: webflowItem.fieldData['date-2'],
         contentLength: content.length,
         readMoreLink: readMoreLink
       });
@@ -189,16 +188,16 @@ class WebflowClient {
       const webflowItem = this.formatContentForWebflow(pressRelease);
 
       // Create the item
-      const url = `/collections/${this.collectionId}/items`;
+      const url = `/v2/sites/${this.siteId}/collections/${this.collectionId}/items`;
       const response = await this.makeRequest('POST', url, webflowItem);
 
-      console.log(`Successfully created item: ${pressRelease.title} (ID: ${response._id})`);
+      console.log(`Successfully created item: ${pressRelease.title} (ID: ${response.id})`);
       
       return {
         success: true,
-        id: response._id,
+        id: response.id,
         title: pressRelease.title,
-        slug: webflowItem.fields.slug
+        slug: webflowItem.fieldData.slug
       };
 
     } catch (error) {
@@ -216,7 +215,7 @@ class WebflowClient {
     try {
       console.log(`Publishing item: ${itemId}`);
       
-      const url = `/collections/${this.collectionId}/items/${itemId}/publish`;
+      const url = `/v2/sites/${this.siteId}/collections/${this.collectionId}/items/${itemId}/publish`;
       await this.makeRequest('PUT', url);
       
       console.log(`Successfully published item: ${itemId}`);
@@ -231,8 +230,8 @@ class WebflowClient {
     try {
       console.log('Publishing site...');
       
-      const url = `/sites/${this.siteId}/publish`;
-      const response = await this.makeRequest('POST', url, { domains: [] });
+      const url = `/v2/sites/${this.siteId}/publish`;
+      const response = await this.makeRequest('POST', url, { publishToWebflowSubdomain: true });
       
       console.log('Site publish initiated successfully');
       return response;
@@ -287,41 +286,21 @@ class WebflowClient {
     try {
       console.log('Testing Webflow connection...');
       
-      // Try v1 API first
-      try {
-        const url = `/sites`;
-        const response = await this.makeRequest('GET', url);
-        
-        console.log(`Connected to Webflow v1! Found ${response.length || 0} sites`);
-        
-        // Find our specific site
-        const ourSite = response.find(site => site._id === this.siteId);
-        if (ourSite) {
-          console.log(`Target site found: ${ourSite.name}`);
-          return true;
-        } else {
-          console.warn(`Site ${this.siteId} not found in accessible sites`);
-          console.log('Available sites:', response.map(s => `${s.name} (${s._id})`));
-          return false;
-        }
-      } catch (v1Error) {
-        console.log('v1 API failed, trying v2...', v1Error.message);
-        
-        // Fallback to v2 API
-        const url = `/v2/sites`;
-        const response = await this.makeRequest('GET', url);
-        
-        console.log(`Connected to Webflow v2! Found ${response.sites?.length || 0} sites`);
-        
-        // Find our specific site
-        const ourSite = response.sites?.find(site => site.id === this.siteId);
-        if (ourSite) {
-          console.log(`Target site found: ${ourSite.displayName}`);
-          return true;
-        } else {
-          console.warn(`Site ${this.siteId} not found in accessible sites`);
-          return false;
-        }
+      // Use v2 API directly
+      const url = `/v2/sites`;
+      const response = await this.makeRequest('GET', url);
+      
+      console.log(`Connected to Webflow v2! Found ${response.sites?.length || 0} sites`);
+      
+      // Find our specific site
+      const ourSite = response.sites?.find(site => site.id === this.siteId);
+      if (ourSite) {
+        console.log(`Target site found: ${ourSite.displayName}`);
+        return true;
+      } else {
+        console.warn(`Site ${this.siteId} not found in accessible sites`);
+        console.log('Available sites:', response.sites?.map(s => `${s.displayName} (${s.id})`));
+        return false;
       }
     } catch (error) {
       console.error('Webflow connection test failed:', error);
