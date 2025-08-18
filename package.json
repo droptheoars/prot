@@ -1,0 +1,35 @@
+{
+  "name": "euronext-webflow-automation",
+  "version": "1.0.0",
+  "description": "Automated Euronext press release monitoring and Webflow CMS publishing system",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "jest",
+    "deploy": "node deploy/deploy.js",
+    "local": "node src/local-test.js"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "aws-sdk": "^2.1691.0",
+    "axios": "^1.6.2",
+    "cheerio": "^1.0.0-rc.12",
+    "date-fns": "^2.30.0",
+    "date-fns-tz": "^2.0.0",
+    "puppeteer": "^21.5.2"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "keywords": [
+    "euronext",
+    "webflow",
+    "automation",
+    "press-releases",
+    "aws-lambda"
+  ],
+  "author": "Protector Forsikring Automation",
+  "license": "MIT"
+}

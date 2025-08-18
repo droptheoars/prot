@@ -1,0 +1,13 @@
+node_modules/
+.env
+.env.local
+.aws/
+logs/
+*.log
+.DS_Store
+dist/
+build/
+coverage/
+.nyc_output/
+.serverless/
+lambda-package.zip
