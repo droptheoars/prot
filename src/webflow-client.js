@@ -287,11 +287,42 @@ class WebflowClient {
     try {
       console.log('Testing Webflow connection...');
       
-      const url = `/sites/${this.siteId}`;
-      const response = await this.makeRequest('GET', url);
-      
-      console.log(`Connected to site: ${response.name} (${response.shortName})`);
-      return true;
+      // Try v1 API first
+      try {
+        const url = `/sites`;
+        const response = await this.makeRequest('GET', url);
+        
+        console.log(`Connected to Webflow v1! Found ${response.length || 0} sites`);
+        
+        // Find our specific site
+        const ourSite = response.find(site => site._id === this.siteId);
+        if (ourSite) {
+          console.log(`Target site found: ${ourSite.name}`);
+          return true;
+        } else {
+          console.warn(`Site ${this.siteId} not found in accessible sites`);
+          console.log('Available sites:', response.map(s => `${s.name} (${s._id})`));
+          return false;
+        }
+      } catch (v1Error) {
+        console.log('v1 API failed, trying v2...', v1Error.message);
+        
+        // Fallback to v2 API
+        const url = `/v2/sites`;
+        const response = await this.makeRequest('GET', url);
+        
+        console.log(`Connected to Webflow v2! Found ${response.sites?.length || 0} sites`);
+        
+        // Find our specific site
+        const ourSite = response.sites?.find(site => site.id === this.siteId);
+        if (ourSite) {
+          console.log(`Target site found: ${ourSite.displayName}`);
+          return true;
+        } else {
+          console.warn(`Site ${this.siteId} not found in accessible sites`);
+          return false;
+        }
+      }
     } catch (error) {
       console.error('Webflow connection test failed:', error);
       return false;

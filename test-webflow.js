@@ -12,16 +12,30 @@ async function testWebflowAPI() {
   try {
     const response = await axios({
       method: 'GET',
-      url: `https://api.webflow.com/sites/${siteId}`,
+      url: `https://api.webflow.com/v2/sites`,
       headers: {
-        'Authorization': `Bearer ${apiToken}`,
-        'Accept-Version': '1.0.0'
+        'Authorization': `Bearer ${apiToken}`
       }
     });
     
     console.log('✅ Webflow API connection successful!');
-    console.log('Site:', response.data.name);
-    console.log('Domain:', response.data.domain);
+    console.log('Sites found:', response.data.sites?.length || 0);
+    
+    // Find our specific site
+    const ourSite = response.data.sites?.find(site => site.id === siteId);
+    if (ourSite) {
+      console.log('✅ Target site found:', ourSite.displayName);
+      console.log('Site ID:', ourSite.id);
+      console.log('Workspace:', ourSite.workspaceId);
+      return true;
+    } else {
+      console.log('❌ Target site not found in accessible sites');
+      console.log('Available sites:');
+      response.data.sites?.forEach(site => {
+        console.log(`  - ${site.displayName} (${site.id})`);
+      });
+      return false;
+    }
     
     return true;
   } catch (error) {
