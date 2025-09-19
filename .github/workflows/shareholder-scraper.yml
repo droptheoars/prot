@@ -1,0 +1,64 @@
+name: Norwegian Shareholder Registry Scraper
+
+on:
+  # Run daily at 12:00 PM (noon) UTC
+  # Adjust timezone as needed - this is 12:00 PM UTC
+  schedule:
+    - cron: '0 12 * * *'
+  
+  # Allow manual triggering for testing
+  workflow_dispatch:
+
+jobs:
+  scrape-shareholders:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('shareholder-requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r shareholder-requirements.txt
+    
+    - name: Run scraper
+      env:
+        REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+        REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+        WEBFLOW_API_TOKEN: ${{ secrets.WEBFLOW_API_TOKEN }}
+        WEBFLOW_COLLECTION_ID: ${{ secrets.WEBFLOW_COLLECTION_ID }}
+        WEBFLOW_SITE_ID: ${{ secrets.WEBFLOW_SITE_ID }}
+      run: |
+        python shareholder_main.py
+    
+    - name: Upload logs as artifact
+      uses: actions/upload-artifact@v3
+      if: always()  # Upload logs even if the scraper fails
+      with:
+        name: scraper-logs-${{ github.run_number }}
+        path: shareholder-scraper.log
+        retention-days: 30
+    
+    # Optional: Send notification on failure
+    - name: Notify on failure
+      if: failure()
+      run: |
+        echo "Shareholder scraper failed! Check the logs for details."
+        # You can add webhook notifications here (Slack, Discord, etc.)
+        # curl -X POST -H 'Content-type: application/json' \
+        #   --data '{"text":"Shareholder scraper failed!"}' \
+        #   ${{ secrets.SLACK_WEBHOOK_URL }}
