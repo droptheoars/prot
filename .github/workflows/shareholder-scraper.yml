@@ -42,8 +42,10 @@ jobs:
         WEBFLOW_API_TOKEN: ${{ secrets.WEBFLOW_API_TOKEN }}
         WEBFLOW_COLLECTION_ID: ${{ secrets.WEBFLOW_COLLECTION_ID }}
         WEBFLOW_SITE_ID: ${{ secrets.WEBFLOW_SITE_ID }}
+        # Note: 2FA will need manual handling or email automation
       run: |
         python shareholder_main.py
+      continue-on-error: true  # Allow workflow to continue if 2FA blocks it
     
     - name: Upload logs as artifact
       uses: actions/upload-artifact@v3

@@ -7,10 +7,11 @@ class Config:
     # Shareholder registry credentials
     REGISTRY_USERNAME = os.getenv('REGISTRY_USERNAME')
     REGISTRY_PASSWORD = os.getenv('REGISTRY_PASSWORD')
+    TWOFA_CODE = os.getenv('TWOFA_CODE')  # Optional: for automated 2FA if possible
     
-    # Target URL
-    TARGET_URL = 'https://www.aksjeeierregisteret.no/content/security/?orgnr=985279721&companies-search=protect'
-    LOGIN_URL = 'https://www.aksjeeierregisteret.no/login'
+    # Target URL - Protector Forsikring ASA
+    TARGET_URL = 'https://www.aksjeeierregisteret.no/content/security/?orgnr=985279721'
+    LOGIN_URL = 'https://www.aksjeeierregisteret.no/login/'
     
     # Webflow API
     WEBFLOW_API_TOKEN = os.getenv('WEBFLOW_API_TOKEN')

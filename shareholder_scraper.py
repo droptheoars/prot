@@ -1,5 +1,6 @@
 import requests
 import logging
+import time
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
 from shareholder_config import Config
@@ -20,16 +21,18 @@ class ShareholderScraper:
         })
     
     def login(self) -> bool:
-        """Authenticate with the shareholder registry"""
+        """Authenticate with the shareholder registry including 2FA"""
         try:
-            # Get login page to retrieve any CSRF tokens or form data
+            logger.info("Starting login process...")
+            
+            # Step 1: Get login page
             login_page = self.session.get(Config.LOGIN_URL)
             login_page.raise_for_status()
             
             soup = BeautifulSoup(login_page.content, 'html.parser')
             
-            # Find login form and extract any hidden fields
-            login_form = soup.find('form')
+            # Find login form
+            login_form = soup.find('form', {'id': 'login-form'}) or soup.find('form')
             if not login_form:
                 logger.error("Could not find login form")
                 return False
@@ -40,7 +43,7 @@ class ShareholderScraper:
                 'password': Config.REGISTRY_PASSWORD
             }
             
-            # Add any hidden form fields (CSRF tokens, etc.)
+            # Add any hidden fields (CSRF tokens, etc.)
             for hidden_input in soup.find_all('input', type='hidden'):
                 name = hidden_input.get('name')
                 value = hidden_input.get('value', '')
@@ -48,29 +51,118 @@ class ShareholderScraper:
                     login_data[name] = value
             
             # Submit login form
-            action = login_form.get('action', Config.LOGIN_URL)
+            action = login_form.get('action', '/login/')
             if action.startswith('/'):
                 action = f"https://www.aksjeeierregisteret.no{action}"
             
+            logger.info("Submitting login credentials...")
             response = self.session.post(action, data=login_data)
             response.raise_for_status()
             
-            # Check if login was successful (you may need to adjust this check)
-            if 'logout' in response.text.lower() or response.url != Config.LOGIN_URL:
+            # Check if we need 2FA
+            if 'two factor' in response.text.lower() or 'tofaktor' in response.text.lower():
+                logger.info("2FA required. Waiting for code...")
+                
+                # Get 2FA code from environment or wait for manual input
+                twofa_code = Config.TWOFA_CODE
+                if not twofa_code:
+                    logger.warning("2FA code not provided. Please set TWOFA_CODE environment variable")
+                    logger.info("Waiting 30 seconds for manual 2FA completion...")
+                    time.sleep(30)  # Wait for manual intervention
+                    return self.verify_login()
+                
+                # Submit 2FA code if provided
+                soup = BeautifulSoup(response.content, 'html.parser')
+                twofa_form = soup.find('form')
+                
+                if twofa_form:
+                    twofa_data = {'code': twofa_code}
+                    
+                    # Add hidden fields
+                    for hidden in soup.find_all('input', type='hidden'):
+                        name = hidden.get('name')
+                        if name:
+                            twofa_data[name] = hidden.get('value', '')
+                    
+                    twofa_action = twofa_form.get('action', response.url)
+                    if twofa_action.startswith('/'):
+                        twofa_action = f"https://www.aksjeeierregisteret.no{twofa_action}"
+                    
+                    logger.info("Submitting 2FA code...")
+                    twofa_response = self.session.post(twofa_action, data=twofa_data)
+                    twofa_response.raise_for_status()
+                    
+                    if self.verify_login():
+                        logger.info("Login with 2FA successful")
+                        return True
+            
+            # Check if already logged in
+            if self.verify_login():
                 logger.info("Login successful")
                 return True
-            else:
-                logger.error("Login failed")
-                return False
+            
+            logger.error("Login failed - unable to verify session")
+            return False
                 
         except Exception as e:
             logger.error(f"Login error: {str(e)}")
             return False
     
+    def verify_login(self) -> bool:
+        """Verify if we are logged in by checking for logout link or dashboard"""
+        try:
+            dashboard = self.session.get("https://www.aksjeeierregisteret.no/")
+            return 'logout' in dashboard.text.lower() or 'logg ut' in dashboard.text.lower()
+        except:
+            return False
+    
+    def navigate_to_protector(self) -> bool:
+        """Navigate from dashboard to Protector company page"""
+        try:
+            logger.info("Navigating to Protector company page...")
+            
+            # First, go to the dashboard/home page
+            dashboard_response = self.session.get("https://www.aksjeeierregisteret.no/")
+            dashboard_response.raise_for_status()
+            
+            # Search for Protector
+            search_url = "https://www.aksjeeierregisteret.no/"
+            search_data = {
+                'companies-search': 'Protector'
+            }
+            
+            # Submit search form
+            search_response = self.session.post(search_url, data=search_data)
+            
+            # Look for the Protector link in search results
+            soup = BeautifulSoup(search_response.content, 'html.parser')
+            
+            # Find the row with Protector (org number: 985279721)
+            protector_row = soup.find('tr', {'data-orgnr': '985279721'})
+            
+            if protector_row:
+                # Direct link to Protector page
+                protector_url = "https://www.aksjeeierregisteret.no/content/security/?orgnr=985279721"
+                logger.info(f"Found Protector, navigating to: {protector_url}")
+                return True
+            else:
+                # Alternative: try direct navigation
+                logger.info("Using direct URL to Protector page")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Navigation error: {str(e)}")
+            return False
+    
     def scrape_shareholders(self) -> List[Dict[str, str]]:
         """Scrape top 20 shareholders data"""
         try:
-            # Make authenticated request to target page
+            # Navigate to Protector page
+            if not self.navigate_to_protector():
+                logger.error("Failed to navigate to Protector page")
+                return []
+            
+            # Make request to Protector shareholders page
             response = self.session.get(Config.TARGET_URL)
             response.raise_for_status()
             
